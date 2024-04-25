@@ -1,85 +1,112 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
 from ebooklib import epub
-from selenium.common.exceptions import StaleElementReferenceException
-import time
-from selenium.common.exceptions import TimeoutException
+from selenium import webdriver
+from webdriver_auto_update.chrome_app_utils import ChromeAppUtils
+from webdriver_auto_update.webdriver_manager import WebDriverManager
 
-# можно заставить авторизироваться при входе или автоматически входить на страницу для аворизации вводить логин и пароль, затем перезодить на книгу.
+from pages import ChapterPage, TitlePage, ElementType
+from pathlib import Path
+import requests
 
-driver = webdriver.Chrome()
-url = 'https://ranobelib.me/full-dive-eternal-phantasy/v1/c7?bid=5086&ui=2012294'
-driver.get(url)
-time.sleep(30)
+SELENIUM_FOLDER = "C:\Programs\Selenium"
+CACHE_FOLDER = Path("cache/")
 
-# Ждем, пока кнопка загрузится и кликаем по ней _ это если с инфо о книге начинать
-# start_reading_button = WebDriverWait(driver, 10).until(
-#     EC.element_to_be_clickable((By.CLASS_NAME, 'button_primary'))
-# )
-# driver.delete_all_cookies()
-# start_reading_button.click()
 
-# Создание новой книги EPUB
-book = epub.EpubBook()
-book.set_identifier('1')
-book.set_title('Название')
-book.set_language('ru')
+def update_selenium(path: str):
+    # Using ChromeAppUtils to inspect Chrome application version
+    chrome_app_utils = ChromeAppUtils()
+    chrome_app_version = chrome_app_utils.get_chrome_version()
+    print(f"Chrome application version: {chrome_app_version}")
 
-# URL первой главы
-# current_chapter = 0
-# max_chapters = 1  # Максимальное количество глав для загрузки
+    # Create an instance of WebDriverManager
+    driver_manager = WebDriverManager(path)
 
-while True:
-# for i in range(1):
-    try:
-        time.sleep(1)  # Подождем, чтобы страница загрузилась полностью
-        # Получение HTML-кода текущей главы
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+    # Call the main method to manage chromedriver
+    driver_manager.main()
 
-        # Извлечение названия и содержимого текущей главы
-        chapter_title_element = soup.find('a', {'class': 'reader-header-action'})
-        chapter_title = chapter_title_element.find('div', {'data-media-down': 'md'}).text.strip()
-        chapter_content = driver.find_element(By.CLASS_NAME, 'reader-container').get_attribute('innerHTML')
 
-        print("Chapter Title:", chapter_title)
-        # print("Chapter Content:", chapter_content)
+def parse_id(book_url: str) -> str | None:
+    return None
 
-        # Если данные найдены, создаем объект главы в формате EPUB
-        c = epub.EpubHtml(title=chapter_title, file_name=f'{chapter_title}.xhtml', lang='ru')
-        c.content = chapter_title + chapter_content
 
-        # c.content = "<p>Арарарар</p><p>бабабабабаб</p>"
-        # Добавление главы в книгу
-        book.add_item(c)
-        book.spine.append(c)
+def retrieve_image(url: str):
+    response = requests.get(url)
+    if response.ok:
+        return response.content
+    return None
 
-        try:
-            next_chapter_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.CLASS_NAME, 'button_label_right'))
+
+class BookCreator:
+    def __init__(self, start_url: str, chapter: int = 0) -> None:
+        self._driver = webdriver.Chrome()
+        self._book: epub.EpubBook | None = None
+        self._start_url = start_url
+        self._chapter = chapter
+        self._toc = []
+
+        self._driver.get(start_url)
+    
+    def _form_book(self):
+        """Creates book object and populates it with content from the start page."""
+        title_page = TitlePage(self._driver, 10)
+        self._book = epub.EpubBook()
+        _id = parse_id(self._start_url)
+        self._book.set_identifier(_id if _id else "default")
+        self._book.set_title(title_page.title())
+        self._book.set_language("ru")
+        cover = retrieve_image(title_page.cover())
+        if cover:
+            self._book.set_cover("cover.jpg", cover)
+            # self._book.spine = ["cover", "nav"]
+        self._book.spine = ["nav"]
+        title_page.to_chapter(self._chapter)
+
+    def __enter__(self) -> tuple[webdriver.Chrome, epub.EpubBook]:
+        self._form_book()
+        return self._driver, self._book, self._toc
+    
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self._driver.quit()
+        if self._book:
+            self._book.toc = tuple(self._toc)
+            self._book.add_item(epub.EpubNcx())
+            self._book.add_item(epub.EpubNav())
+            epub.write_epub(f"{self._book.title}.epub", self._book)
+
+
+def main():
+    """Entry point."""
+    # check selenium
+    update_selenium(SELENIUM_FOLDER)
+    # getting arguments
+    url = "https://ranobelib.me/ru/book/24701--the-bears-bear-a-bare-kuma-novel?section=chapters"
+    # doing something
+    creator = BookCreator(url)
+    with creator as (driver, book, toc):
+        # while True:
+        for _ in range(5):
+            chapter_page = ChapterPage(driver, 5)
+            title = chapter_page.title()
+            content = ["<html><body>"]
+            for elem in chapter_page.content():
+                if elem.type == ElementType.Text:
+                    content.append(f"<p>{elem.content}</p>")
+                elif elem.type == ElementType.Image:
+                    pass
+            content.append("</html></body>")
+            chapter = epub.EpubHtml(
+                title=title,
+                file_name=f"{title}.xhtml",
             )
-
-            href_attribute = next_chapter_button.get_attribute("href")
-
-            if href_attribute == "#":
-                # Выход из цикла, так как href равен "#"
+            chapter.content = "\n".join(content)
+            book.add_item(chapter)
+            book.spine.append(chapter)
+            toc.append(chapter)
+            print(f"[Info]: Finished chapter '{title}'")
+            if not chapter_page.next_chapter():
                 break
-            else:
-                # Ваш код для перехода к следующей главе
-                next_chapter_button.click()
+    # we are done
+    print("All done!")
 
-        except TimeoutException:
-            # Обработка исключения TimeoutException
-            print("Главы закончились, формирую книгу...")
-            break
 
-    except StaleElementReferenceException:
-        # Если элемент не найден, ожидание нового состояния страницы
-        continue
-
-# Генерация файла EPUB
-epub.write_epub('Польное погрудение.epub', book, {})
-driver.quit()
-print("Книга сформирована!")
+if __name__ == "__main__":
+    main()

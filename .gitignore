@@ -1,0 +1,6 @@
+# pipenv trash
+Pipfile.lock
+
+# result files
+*.epub
+cache/*
