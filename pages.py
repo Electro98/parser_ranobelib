@@ -39,9 +39,9 @@ class Page:
 
 class ChapterPage(Page):
     elements: dict[str, tuple[LiteralString, str]] = {
-        "header": (By.XPATH, "//div[@class='jp_m']/h1"),
-        "text_block": (By.XPATH, "//main[@class='jp_bm']/div[@class='text-content']"),
-        "next_chapter": (By.XPATH, "//div[@class='qq_ar']/a[last()]/span"),
+        "header": (By.XPATH, "//h1"),
+        "text_block": (By.XPATH, "//main/div[@class='text-content']"),
+        "next_chapter": (By.XPATH, "//div/a[@type='button'][last()]/span"),
     }
 
     def title(self) -> str:
@@ -83,8 +83,8 @@ class ChapterPage(Page):
 
 class TitlePage(Page):
     elements: dict[str, tuple[LiteralString, str]] = {
-        "title": (By.XPATH, "//h1[@class='no_nq']/span"),
-        "start_reading": (By.XPATH, "//div[@class='gq_bq']/a[contains(@class, 'btn')]"),
+        "title": (By.XPATH, "//h1/span"),
+        "start_reading": (By.XPATH, "//div[button]/a[@type='button']"),
         "cover": (By.XPATH, "//div[@class='cover']/div/img"),
     }
 
