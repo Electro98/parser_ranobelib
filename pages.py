@@ -59,10 +59,13 @@ class ChapterPage(Page):
                 continue
             yield result
     
-    def next_chapter(self) -> bool:
+    def next_chapter(self, by_link: bool = False) -> bool:
         next_chapter = self._elements["next_chapter"]
         if "К Тайтлу" == next_chapter.get_attribute("innerHTML"):
             return False
+        if by_link:
+            self._driver.get(next_chapter.parent.get_attribute("href"))
+            return True
         url = self._driver.current_url
         while True:
             actions = (ActionChains(self._driver)
