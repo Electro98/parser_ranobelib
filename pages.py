@@ -84,7 +84,7 @@ class ChapterPage(Page):
 class TitlePage(Page):
     elements: dict[str, tuple[LiteralString, str]] = {
         "title": (By.XPATH, "//h1/span"),
-        "start_reading": (By.XPATH, "//div[button]/a[@type='button']"),
+        "start_reading": (By.XPATH, "//div[button | div]/a[@type='button'][span/following-sibling::span]"),  # noqa: E501
         "cover": (By.XPATH, "//div[@class='cover']/div/img"),
     }
 
