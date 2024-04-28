@@ -1,15 +1,15 @@
+import re
+from dataclasses import dataclass
+from enum import StrEnum, auto
+from typing import Generator, LiteralString
+
 from selenium import webdriver
 from selenium.common.exceptions import MoveTargetOutOfBoundsException
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.common.action_chains import ActionChains
-
-from typing import LiteralString, Generator
-from enum import StrEnum, auto
-from dataclasses import dataclass
-import re
 
 
 class ElementType(StrEnum):

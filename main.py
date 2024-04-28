@@ -1,12 +1,13 @@
+import re
+from pathlib import Path
+
+import requests
 from ebooklib import epub
 from selenium import webdriver
 from webdriver_auto_update.chrome_app_utils import ChromeAppUtils
 from webdriver_auto_update.webdriver_manager import WebDriverManager
 
-from pages import ChapterPage, TitlePage, ElementType
-from pathlib import Path
-import requests
-import re
+from pages import ChapterPage, ElementType, TitlePage
 
 SELENIUM_FOLDER = "C:\Programs\Selenium"
 CACHE_FOLDER = Path("cache/")
