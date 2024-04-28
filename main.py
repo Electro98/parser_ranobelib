@@ -6,6 +6,7 @@ from webdriver_auto_update.webdriver_manager import WebDriverManager
 from pages import ChapterPage, TitlePage, ElementType
 from pathlib import Path
 import requests
+import re
 
 SELENIUM_FOLDER = "C:\Programs\Selenium"
 CACHE_FOLDER = Path("cache/")
@@ -26,6 +27,10 @@ def update_selenium(path: str):
 
 def parse_id(book_url: str) -> str | None:
     return None
+
+
+def sanitize_filepath(filename: str) -> str:
+    return re.sub(r"[^\w_. -()]", "", filename)
 
 
 def retrieve_image(url: str):
@@ -70,7 +75,8 @@ class BookCreator:
             self._book.toc = tuple(self._toc)
             self._book.add_item(epub.EpubNcx())
             self._book.add_item(epub.EpubNav())
-            epub.write_epub(f"{self._book.title}.epub", self._book)
+            clean_filename = sanitize_filepath(f"{self._book.title}.epub")
+            epub.write_epub(clean_filename, self._book)
 
 
 def main():
@@ -78,7 +84,7 @@ def main():
     # check selenium
     update_selenium(SELENIUM_FOLDER)
     # getting arguments
-    url = "https://ranobelib.me/ru/book/24701--the-bears-bear-a-bare-kuma-novel?section=chapters"
+    url = "https://ranobelib.me/ru/book/62850--akuyaku-reijo-wa-shomin-ni-totsugitai-novel"
     # doing something
     creator = BookCreator(url)
     with creator as (driver, book, toc):
@@ -93,19 +99,22 @@ def main():
                 elif elem.type == ElementType.Image:
                     pass
             content.append("</html></body>")
-            chapter = epub.EpubHtml(
-                title=title,
-                file_name=f"{title}.xhtml",
-            )
-            chapter.content = "\n".join(content)
-            book.add_item(chapter)
-            book.spine.append(chapter)
-            toc.append(chapter)
-            print(f"[Info]: Finished chapter '{title}'")
+            if len(content) > 2:
+                chapter = epub.EpubHtml(
+                    title=title,
+                    file_name=f"{title}.xhtml",
+                )
+                chapter.content = "\n".join(content)
+                book.add_item(chapter)
+                book.spine.append(chapter)
+                toc.append(chapter)
+                print(f"[Info]: Finished chapter '{title}'")
+            else:
+                print(f"[Info]: Dropped chapter '{title}' - no content found")
             if not chapter_page.next_chapter():
                 break
     # we are done
-    print("All done!")
+    print("[Info]: All done!")
 
 
 if __name__ == "__main__":

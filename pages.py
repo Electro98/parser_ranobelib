@@ -9,6 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from typing import LiteralString, Generator
 from enum import StrEnum, auto
 from dataclasses import dataclass
+import re
 
 
 class ElementType(StrEnum):
@@ -45,7 +46,8 @@ class ChapterPage(Page):
     }
 
     def title(self) -> str:
-        return self._elements["header"].get_attribute("innerHTML")
+        title = self._elements["header"].get_attribute("innerHTML")
+        return re.sub(r"[ ]?<!--(.*?)-->", "", title).strip()
     
     def content(self) -> Generator[Element, None, None]:
         childs = self._elements["text_block"].find_elements(By.CSS_SELECTOR, "*")
