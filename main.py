@@ -1,5 +1,6 @@
-import re
 from pathlib import Path
+from argparse import ArgumentParser
+import logging
 
 import requests
 from ebooklib import epub
@@ -8,17 +9,15 @@ from webdriver_auto_update.chrome_app_utils import ChromeAppUtils
 from webdriver_auto_update.webdriver_manager import WebDriverManager
 
 from pages import ChapterPage, ElementType, TitlePage
+from utilities import get_book_id, sanitize_filepath
 
-SELENIUM_FOLDER = "C:\Programs\Selenium"
+SELENIUM_FOLDER = "C:\\Programs\\Selenium"
 CACHE_FOLDER = Path("cache/")
+
+logger = logging.getLogger("parser")
 
 
 def update_selenium(path: str):
-    # Using ChromeAppUtils to inspect Chrome application version
-    chrome_app_utils = ChromeAppUtils()
-    chrome_app_version = chrome_app_utils.get_chrome_version()
-    print(f"Chrome application version: {chrome_app_version}")
-
     # Create an instance of WebDriverManager
     driver_manager = WebDriverManager(path)
 
@@ -26,12 +25,10 @@ def update_selenium(path: str):
     driver_manager.main()
 
 
-def parse_id(book_url: str) -> str | None:
-    return None
-
-
-def sanitize_filepath(filename: str) -> str:
-    return re.sub(r"[^\w_. -()]", "", filename)
+def create_webdriver() -> webdriver.Chrome:
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    return webdriver.Chrome(options)
 
 
 def retrieve_image(url: str):
@@ -42,8 +39,8 @@ def retrieve_image(url: str):
 
 
 class BookCreator:
-    def __init__(self, start_url: str, chapter: int = 0) -> None:
-        self._driver = webdriver.Chrome()
+    def __init__(self, start_url: str, chapter: int | None = 0) -> None:
+        self._driver = create_webdriver()
         self._book: epub.EpubBook | None = None
         self._start_url = start_url
         self._chapter = chapter
@@ -55,7 +52,7 @@ class BookCreator:
         """Creates book object and populates it with content from the start page."""
         title_page = TitlePage(self._driver, 10)
         self._book = epub.EpubBook()
-        _id = parse_id(self._start_url)
+        _id = get_book_id(self._start_url)
         self._book.set_identifier(_id if _id else "default")
         self._book.set_title(title_page.title())
         self._book.set_language("ru")
@@ -70,27 +67,56 @@ class BookCreator:
         self._form_book()
         return self._driver, self._book, self._toc
     
-    def __exit__(self, exc_type, exc_value, exc_tb):
+    def __exit__(self, exc_type, exc_value, exc_tb) -> bool:
         self._driver.quit()
-        if self._book:
-            self._book.toc = tuple(self._toc)
-            self._book.add_item(epub.EpubNcx())
-            self._book.add_item(epub.EpubNav())
-            clean_filename = sanitize_filepath(f"{self._book.title}.epub")
-            epub.write_epub(clean_filename, self._book)
+        if not self._book:
+            return False
+        self._book.toc = tuple(self._toc)
+        self._book.add_item(epub.EpubNcx())
+        self._book.add_item(epub.EpubNav())
+        clean_filename = sanitize_filepath(f"{self._book.title}.epub")
+        epub.write_epub(clean_filename, self._book)
+        return True
 
+
+def parse_arguments():
+    parser = ArgumentParser(
+        prog="RanobeLIB parser",
+        description="As you expect",
+    )
+    parser.add_argument("url")
+    parser.add_argument(
+        "-f", "--from", type=int, default=None,
+        help="From which chapter to start (number).")
+    parser.add_argument(
+        "-n", "--num", type=int, default=None,
+        help="Number of chapters to parse.")
+    return parser.parse_args()
 
 def main():
     """Entry point."""
+    # Setting logging
+    logging.basicConfig(
+        format="[%(levelname)s]: %(message)s",
+        level=logging.CRITICAL,
+    )
+    logger.setLevel(logging.DEBUG)
+    logging.addLevelName(logging.DEBUG, "Debg")
+    logging.addLevelName(logging.INFO, "Info")
+    logging.addLevelName(logging.WARN, "Warn")
+    logging.addLevelName(logging.ERROR, "Erro")
+    # getting arguments
+    args = parse_arguments()
+    url = args.url
+    start_chapter = getattr(args, "from")  # because from is reserved keyword
+    chapters_num = args.num or 1_000
     # check selenium
     update_selenium(SELENIUM_FOLDER)
-    # getting arguments
-    url = "https://ranobelib.me/ru/book/62850--akuyaku-reijo-wa-shomin-ni-totsugitai-novel"
     # doing something
-    creator = BookCreator(url)
+    creator = BookCreator(url, start_chapter)
     with creator as (driver, book, toc):
-        # while True:
-        for _ in range(5):
+        chapters = 0
+        while chapters < chapters_num:
             chapter_page = ChapterPage(driver, 5)
             title = chapter_page.title()
             content = ["<html><body>"]
@@ -109,13 +135,15 @@ def main():
                 book.add_item(chapter)
                 book.spine.append(chapter)
                 toc.append(chapter)
-                print(f"[Info]: Finished chapter '{title}'")
+                logger.info("Finished chapter '%s'", title)
+                chapters += 1
             else:
-                print(f"[Info]: Dropped chapter '{title}' - no content found")
+                logger.info("Dropped chapter '%s' - no content found", title)
             if not chapter_page.next_chapter():
                 break
     # we are done
-    print("[Info]: All done!")
+    logger.info("Parsed %d chapters", chapters)
+    logger.info("All done!")
 
 
 if __name__ == "__main__":

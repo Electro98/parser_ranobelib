@@ -1,4 +1,5 @@
 import re
+import logging
 from dataclasses import dataclass
 from enum import StrEnum, auto
 from typing import Generator, LiteralString
@@ -10,6 +11,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+from utilities import parse_chapters, chapter_link, get_book_name
+
+logger = logging.getLogger("parser")
 
 
 class ElementType(StrEnum):
@@ -57,7 +62,7 @@ class ChapterPage(Page):
             elif elem.tag_name == "img":
                 result = Element(ElementType.Image, elem.get_attribute("src"))
             else:
-                # print("Unknown element type found!")
+                # logger.warn("Unknown element type found!")
                 continue
             yield result
     
@@ -78,8 +83,15 @@ class ChapterPage(Page):
             except MoveTargetOutOfBoundsException:
                 continue
             if self._driver.current_url == url:
-                print("[Warning]: failed to advance page!")
+                logger.warn("Failed to advance page!")
                 continue
+            current_handles = self._driver.window_handles
+            if current_handles > 1:
+                for handle in current_handles[1:]:
+                    self._driver.switch_to.window(handle)
+                    self._driver.close()
+                else:
+                    self._driver.switch_to.window(current_handles[0])
             return True
 
 
@@ -96,5 +108,22 @@ class TitlePage(Page):
     def cover(self) -> str:
         return self._elements["cover"].get_attribute("src")
 
-    def to_chapter(self, num: int):
-        self._elements["start_reading"].click()
+    def to_chapter(self, num: int | None = None):
+        try:
+            book_name = get_book_name(self._driver.current_url)
+            if not num or not book_name:
+                raise AttributeError()
+            chapters = parse_chapters(book_name)
+            chapter = chapters[num]
+            chapter_url = chapter_link(book_name, chapter)
+            self._driver.get(chapter_url)
+            logger.debug("Successfully loaded volume %s chapter %s '%s'",
+                          chapter.volume, chapter.number, chapter.name)
+        except (AttributeError, TypeError):
+            logger.info("Starting from the first chapter")
+            self._elements["start_reading"].click()
+        except IndexError:
+            logger.warn("Failed to get %d chapter, there only %d chapters",
+                         num, len(chapters))
+            logger.info("Starting from the first chapter")
+            self._elements["start_reading"].click()
