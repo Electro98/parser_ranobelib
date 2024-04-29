@@ -1,5 +1,5 @@
-import re
 import logging
+import re
 from dataclasses import dataclass
 from enum import StrEnum, auto
 from typing import Generator, LiteralString
@@ -12,7 +12,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from utilities import parse_chapters, chapter_link, get_book_name
+from utilities import chapter_link, get_book_name, parse_chapters
 
 logger = logging.getLogger("parser")
 

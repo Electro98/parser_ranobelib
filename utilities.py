@@ -1,6 +1,7 @@
-import requests
 import re
 from dataclasses import dataclass
+
+import requests
 
 
 @dataclass
