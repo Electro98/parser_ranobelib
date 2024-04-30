@@ -86,7 +86,7 @@ class ChapterPage(Page):
                 logger.warn("Failed to advance page!")
                 continue
             current_handles = self._driver.window_handles
-            if current_handles > 1:
+            if len(current_handles) > 1:
                 for handle in current_handles[1:]:
                     self._driver.switch_to.window(handle)
                     self._driver.close()
