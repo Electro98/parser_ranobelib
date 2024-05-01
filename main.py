@@ -70,6 +70,9 @@ class BookCreator:
         self._driver.quit()
         if not self._book:
             return False
+        if exc_tb:
+            logger.debug("Caught exs: %s %s", exc_type, exc_value)
+        logger.info("Starting saving book")
         self._book.toc = tuple(self._toc)
         self._book.add_item(epub.EpubNcx())
         self._book.add_item(epub.EpubNav())
@@ -116,7 +119,7 @@ def main():
     with creator as (driver, book, toc):
         chapters = 0
         while chapters < chapters_num:
-            chapter_page = ChapterPage(driver, 5)
+            chapter_page = ChapterPage(driver, 8.)
             title = chapter_page.title()
             content = ["<html><body>"]
             for elem in chapter_page.content():

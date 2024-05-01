@@ -1,3 +1,7 @@
+# project
+**/__pycache__/
+.vscode/
+
 # result files
 *.epub
 cache/*

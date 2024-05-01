@@ -5,7 +5,7 @@ from enum import StrEnum, auto
 from typing import Generator, LiteralString
 
 from selenium import webdriver
-from selenium.common.exceptions import MoveTargetOutOfBoundsException
+from selenium.common.exceptions import MoveTargetOutOfBoundsException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
@@ -33,6 +33,7 @@ class Page:
         # "app": (By.ID, "app"),
         # "something": (By.XPATH, "//div[@class='text']/p"),
     }
+    optional_elems: dict[str, tuple[LiteralString, str]] = {}
 
     def __init__(self, driver: webdriver.Chrome, timeout: float = 1.) -> None:
         self._driver = driver
@@ -41,6 +42,14 @@ class Page:
             self._elements[element] = WebDriverWait(self._driver, timeout).until(
                 EC.visibility_of_element_located(mark)
             )
+        for element, mark in self.optional_elems.items():
+            try:
+                self._elements[element] = WebDriverWait(self._driver, timeout).until(
+                    EC.visibility_of_element_located(mark)
+                )
+            except TimeoutException:
+                # Well, okay
+                pass
 
 
 class ChapterPage(Page):
@@ -101,6 +110,11 @@ class TitlePage(Page):
         "start_reading": (By.XPATH, "//div[button | div]/a[@type='button'][span/following-sibling::span]"),  # noqa: E501
         "cover": (By.XPATH, "//div[contains(@class, 'cover')]/div/img"),
     }
+    optional_elems: dict[str, tuple[LiteralString, str]] = {
+        "genres_popup": (By.XPATH, "//div[@role='dialog']"),
+        "close_popup": (By.XPATH, "//div[@role='dialog']/div/div/button[last()]"),
+        "checkbox_popup": (By.XPATH, "//div[@role='dialog']/div/div/label"),
+    }
 
     def title(self) -> str:
         return self._elements["title"].get_attribute("innerHTML")
@@ -121,9 +135,15 @@ class TitlePage(Page):
                           chapter.volume, chapter.number, chapter.name)
         except (AttributeError, TypeError):
             logger.info("Starting from the first chapter")
-            self._elements["start_reading"].click()
+            self.start_reading()
         except IndexError:
             logger.warn("Failed to get %d chapter, there only %d chapters",
                          num, len(chapters))
             logger.info("Starting from the first chapter")
-            self._elements["start_reading"].click()
+            self.start_reading()
+    
+    def start_reading(self):
+        if self._elements.get("genres_popup"):
+            self._elements["checkbox_popup"].click()
+            self._elements["close_popup"].click()
+        self._elements["start_reading"].click()
