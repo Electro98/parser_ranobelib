@@ -78,6 +78,7 @@ class BookCreator:
         self._book.add_item(epub.EpubNav())
         clean_filename = sanitize_filepath(f"{self._book.title}.epub")
         epub.write_epub(clean_filename, self._book)
+        logger.debug("Saved book '%s'", self._book.title)
         return True
 
 
@@ -93,6 +94,9 @@ def parse_arguments():
     parser.add_argument(
         "-n", "--num", type=int, default=None,
         help="Number of chapters to parse.")
+    parser.add_argument(
+        "--fast", action="store_true",
+        help="Increase speed of program by sacrificing user-like behavior.")
     return parser.parse_args()
 
 def main():
@@ -112,6 +116,7 @@ def main():
     url = args.url
     start_chapter = getattr(args, "from")  # because from is reserved keyword
     chapters_num = args.num or 1_000
+    fast = args.fast
     # check selenium
     update_selenium(SELENIUM_FOLDER)
     # doing something
@@ -141,7 +146,7 @@ def main():
                 chapters += 1
             else:
                 logger.info("Dropped chapter '%s' - no content found", title)
-            if not chapter_page.next_chapter():
+            if not chapter_page.next_chapter(fast):
                 break
     # we are done
     logger.info("Parsed %d chapters", chapters)

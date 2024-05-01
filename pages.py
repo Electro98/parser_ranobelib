@@ -44,7 +44,7 @@ class Page:
             )
         for element, mark in self.optional_elems.items():
             try:
-                self._elements[element] = WebDriverWait(self._driver, timeout).until(
+                self._elements[element] = WebDriverWait(self._driver, 1.).until(
                     EC.visibility_of_element_located(mark)
                 )
             except TimeoutException:
@@ -57,6 +57,7 @@ class ChapterPage(Page):
         "header": (By.XPATH, "//h1"),
         "text_block": (By.XPATH, "//main/div[contains(@class, 'text-content')]"),
         "next_chapter": (By.XPATH, "//div/a[@type='button'][last()]/span"),
+        "next_chapter_url": (By.XPATH, "//div/a[@type='button'][last()][span]"),
     }
 
     def title(self) -> str:
@@ -80,7 +81,7 @@ class ChapterPage(Page):
         if "К Тайтлу" == next_chapter.get_attribute("innerHTML"):
             return False
         if by_link:
-            self._driver.get(next_chapter.parent.get_attribute("href"))
+            self._driver.get(self._elements["next_chapter_url"].get_attribute("href"))
             return True
         url = self._driver.current_url
         while True:
