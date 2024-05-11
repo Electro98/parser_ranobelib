@@ -1,30 +1,49 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass
+from enum import StrEnum, auto
+from typing import Any, Type, TypeVar
 
-import requests
+T = TypeVar("T")
+
+
+class ElementType(StrEnum):
+    Text = auto()
+    ImageLink = auto()
+    ImageId = auto()
 
 
 @dataclass
-class Chapter:
-    name: str
-    volume: str
-    number: str
+class Element:
+    type: ElementType
+    content: str
 
 
-def parse_chapters(book_name: str) -> list[Chapter] | None:
-    url = f"https://api.lib.social/api/manga/{book_name}/chapters"
-    request = requests.get(url)
-    if not request.ok:
-        return None
-    data = request.json().get("data", {})
-    return [
-        Chapter(chapter["name"], chapter["volume"], chapter["number"])
-        for chapter in data
-    ]
+class Url:
+    def __init__(self, url: str) -> None:
+        self._url = url
+    
+    def __truediv__(self, other: str) -> "Url":
+        return Url(f"{self._url.lstrip('/')}/{other}")
+
+    def __str__(self) -> str:
+        return self._url
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(\'{self._url}\')"
+
+    def args(self, **kwargs) -> str:
+        return (
+            f"{self._url.lstrip('/')}?"
+            f"{'&'.join((f'{k}={v}' for k, v in kwargs.items()))}"
+        )
 
 
-def chapter_link(book_name: str, chapter: Chapter) -> str:
-    return f"https://ranobelib.me/ru/{book_name}/read/v{chapter.volume}/c{chapter.number}"
+def from_dict(dataclass: Type[T], data: dict[str, Any]) -> T:
+    """Convert average non-nested dict to a dataclass instance."""
+    if not is_dataclass(dataclass):
+        raise TypeError(f"Expected dataclass type, got '{dataclass}'")
+    fields = filter(dataclass.__match_args__.__contains__, data)
+    return dataclass(**{field: data[field] for field in fields})
 
 
 def get_book_name(book_url: str) -> str | None:

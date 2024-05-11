@@ -4,10 +4,9 @@ verify_ssl = false
 name = "pip_conf_index_global"
 
 [packages]
-selenium = "*"
 ebooklib = "*"
-webdriver-auto-update = "*"
 requests = "*"
+beautifulsoup4 = "*"
 
 [dev-packages]
 

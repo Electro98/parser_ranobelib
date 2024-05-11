@@ -4,33 +4,17 @@ from pathlib import Path
 
 import requests
 from ebooklib import epub
-from selenium import webdriver
-from webdriver_auto_update.webdriver_manager import WebDriverManager
 
-from pages import ChapterPage, ElementType, TitlePage
-from utilities import get_book_id, sanitize_filepath
+from api import (BookAPI, ChapterInfo, parse_chapter, parse_chapters,
+                 parse_manga_info)
+from utilities import ElementType, sanitize_filepath
 
-SELENIUM_FOLDER = "C:\\Programs\\Selenium"
 CACHE_FOLDER = Path("cache/")
 
 logger = logging.getLogger("parser")
 
 
-def update_selenium(path: str):
-    # Create an instance of WebDriverManager
-    driver_manager = WebDriverManager(path)
-
-    # Call the main method to manage chromedriver
-    driver_manager.main()
-
-
-def create_webdriver() -> webdriver.Chrome:
-    options = webdriver.ChromeOptions()
-    options.add_experimental_option("excludeSwitches", ["enable-logging"])
-    return webdriver.Chrome(options)
-
-
-def retrieve_image(url: str):
+def retrieve_image(url: str) -> bytes | None:
     response = requests.get(url)
     if response.ok:
         return response.content
@@ -38,36 +22,45 @@ def retrieve_image(url: str):
 
 
 class BookCreator:
-    def __init__(self, start_url: str, chapter: int | None = 0) -> None:
-        self._driver = create_webdriver()
+    def __init__(self, start_url: str, chapter: int | None = None) -> None:
         self._book: epub.EpubBook | None = None
-        self._start_url = start_url
-        self._chapter = chapter
+        self._api = BookAPI(start_url)
+        self._chapter = chapter - 1 if chapter else 0
         self._toc = []
 
-        self._driver.get(start_url)
-    
     def _form_book(self):
         """Creates book object and populates it with content from the start page."""
-        title_page = TitlePage(self._driver, 10)
+        book_info = parse_manga_info(self._api.manga_link())
+        logger.debug("Retrieved information about the book")
         self._book = epub.EpubBook()
-        _id = get_book_id(self._start_url)
-        self._book.set_identifier(_id if _id else "default")
-        self._book.set_title(title_page.title())
+        self._book.set_identifier(str(book_info.id))
+        self._book.set_title(book_info.rus_name)
         self._book.set_language("ru")
-        cover = retrieve_image(title_page.cover())
+        cover = retrieve_image(book_info.cover_img)
         if cover:
             self._book.set_cover("cover.jpg", cover)
             # self._book.spine = ["cover", "nav"]
+            logger.info("Added cover image!")
+        else:
+            logger.debug("Failed to retrieve cover image")
         self._book.spine = ["nav"]
-        title_page.to_chapter(self._chapter)
 
-    def __enter__(self) -> tuple[webdriver.Chrome, epub.EpubBook]:
+    def _to_chapter(self):
+        self._chapters = parse_chapters(self._api.chapters_link())
+        if self._chapters is None:
+            raise ValueError("Failed to parse chapters!") 
+        elif len(self._chapters) <= self._chapter:
+            logger.info("There less chapters than was expected!")
+            logger.info("Starting from 1 chapter!")
+        else:
+            self._chapters = self._chapters[self._chapter:]
+
+    def __enter__(self) -> tuple[BookAPI, epub.EpubBook, list, list[ChapterInfo]]:
         self._form_book()
-        return self._driver, self._book, self._toc
-    
+        self._to_chapter()
+        return self._api, self._book, self._toc, self._chapters
+
     def __exit__(self, exc_type, exc_value, exc_tb) -> bool:
-        self._driver.quit()
         if not self._book:
             return False
         if exc_tb:
@@ -94,10 +87,8 @@ def parse_arguments():
     parser.add_argument(
         "-n", "--num", type=int, default=None,
         help="Number of chapters to parse.")
-    parser.add_argument(
-        "--fast", action="store_true",
-        help="Increase speed of program by sacrificing user-like behavior.")
     return parser.parse_args()
+
 
 def main():
     """Entry point."""
@@ -116,40 +107,40 @@ def main():
     url = args.url
     start_chapter = getattr(args, "from")  # because from is reserved keyword
     chapters_num = args.num or 1_000
-    fast = args.fast
-    # check selenium
-    update_selenium(SELENIUM_FOLDER)
     # doing something
     creator = BookCreator(url, start_chapter)
-    with creator as (driver, book, toc):
-        chapters = 0
-        while chapters < chapters_num:
-            chapter_page = ChapterPage(driver, 8.)
-            title = chapter_page.title()
+    logger.debug("Starting parsing process")
+    parsed_chapters = 0
+    with creator as (api, book, toc, chapters):
+        for chapter_info in chapters[:chapters_num]:
+            chapter = parse_chapter(api.chapter_link(chapter_info))
+            title = chapter.name
             content = ["<html><body>"]
-            for elem in chapter_page.content():
+            for elem in chapter.content:
                 if elem.type == ElementType.Text:
                     content.append(f"<p>{elem.content}</p>")
-                elif elem.type == ElementType.Image:
+                elif elem.type == ElementType.ImageId:
+                    pass
+                elif elem.type == ElementType.ImageLink:
                     pass
             content.append("</html></body>")
             if len(content) > 2:
-                chapter = epub.EpubHtml(
+                book_chapter = epub.EpubHtml(
                     title=title,
                     file_name=f"{title}.xhtml",
                 )
-                chapter.content = "\n".join(content)
-                book.add_item(chapter)
-                book.spine.append(chapter)
-                toc.append(chapter)
-                logger.info("Finished chapter '%s'", title)
-                chapters += 1
+                book_chapter.content = "\n".join(content)
+                book.add_item(book_chapter)
+                book.spine.append(book_chapter)
+                toc.append(book_chapter)
+                logger.info("Finished chapter %s vol %s '%s'",
+                            chapter.number, chapter.volume, title)
+                parsed_chapters += 1
             else:
-                logger.info("Dropped chapter '%s' - no content found", title)
-            if not chapter_page.next_chapter(fast):
-                break
+                logger.info("Dropped chapter %s vol %s '%s' - no content found",
+                            chapter.number, chapter.volume, title)
     # we are done
-    logger.info("Parsed %d chapters", chapters)
+    logger.info("Parsed %d chapters", parsed_chapters)
     logger.info("All done!")
 
 
