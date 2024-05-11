@@ -69,8 +69,13 @@ def sanitize_filepath(filename: str) -> str:
 def retry(func, retries: int = 5, sleep_time: float = 10.):
     @wraps(func)
     def wrapper(*args, **kwargs):
+        exs = None
         for i in range(retries):
-            result = func(*args, **kwargs)
+            try:
+                result = func(*args, **kwargs)
+            except Exception as _exs:
+                result = None
+                exs = _exs
             if result is not None:
                 return result
             if i + 1 == retries:
@@ -80,6 +85,8 @@ def retry(func, retries: int = 5, sleep_time: float = 10.):
             sleep(sleep_time)
         logger.warning("Function '%s' failed to execute after %d attempts",
                        func.__name__, retries)
+        if exs:
+            raise exs
         return None
     
     return wrapper

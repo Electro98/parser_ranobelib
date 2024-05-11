@@ -117,7 +117,10 @@ class BookAPI:
 def _get_data(link: str | Url) -> dict | None:
     if isinstance(link, Url):
         link = str(link)
-    request = requests.get(link)
+    request = requests.get(link, headers={
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+    })
     if not request.ok:
         logger.debug("Request error: %d '%s'",
                      request.status_code, request.reason)
