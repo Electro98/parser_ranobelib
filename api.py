@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 
 from utilities import Element
 from utilities import ElementType as ElemType
-from utilities import Url, from_dict, get_book_id, get_book_name
+from utilities import Url, from_dict, get_book_id, get_book_name, retry
 
 logger = getLogger("parser.api")
 
@@ -119,10 +119,13 @@ def _get_data(link: str | Url) -> dict | None:
         link = str(link)
     request = requests.get(link)
     if not request.ok:
+        logger.debug("Request error: %d '%s'",
+                     request.status_code, request.reason)
         return None
-    return request.json().get("data", {})
+    return request.json().get("data")
 
 
+@retry
 def parse_chapters(link: str | Url) -> list[ChapterInfo] | None:
     data = _get_data(link)
     if not data:
@@ -130,6 +133,7 @@ def parse_chapters(link: str | Url) -> list[ChapterInfo] | None:
     return [from_dict(ChapterInfo, chapter) for chapter in data]
 
 
+@retry
 def parse_manga_info(link: str | Url) -> Manga | None:
     data = _get_data(link)
     if not data:
@@ -137,6 +141,7 @@ def parse_manga_info(link: str | Url) -> Manga | None:
     return from_dict(Manga, data)
 
 
+@retry
 def parse_chapter(link: str | Url) -> Chapter | None:
     data = _get_data(link)
     if not data:

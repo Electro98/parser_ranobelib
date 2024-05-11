@@ -1,9 +1,14 @@
 import re
 from dataclasses import dataclass, is_dataclass
 from enum import StrEnum, auto
+from functools import wraps
+from logging import getLogger
+from time import sleep
 from typing import Any, Type, TypeVar
 
 T = TypeVar("T")
+
+logger = getLogger("parser.utils")
 
 
 class ElementType(StrEnum):
@@ -59,3 +64,22 @@ def get_book_id(book_url: str) -> str | None:
 
 def sanitize_filepath(filename: str) -> str:
     return re.sub(r"[^\w_. -()]", "", filename)
+
+
+def retry(func, retries: int = 5, sleep_time: float = 10.):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        for i in range(retries):
+            result = func(*args, **kwargs)
+            if result is not None:
+                return result
+            if i + 1 == retries:
+                continue
+            logger.debug("Function '%s' failed retrying in %.2f seconds",
+                         func.__name__, sleep_time)
+            sleep(sleep_time)
+        logger.warning("Function '%s' failed to execute after %d attempts",
+                       func.__name__, retries)
+        return None
+    
+    return wrapper
