@@ -1,6 +1,7 @@
 import logging
 from argparse import ArgumentParser
 from pathlib import Path
+from time import time
 
 import requests
 from ebooklib import epub
@@ -108,6 +109,7 @@ def main():
     start_chapter = getattr(args, "from")  # because from is reserved keyword
     chapters_num = args.num or 1_000
     # doing something
+    start_time = time()
     creator = BookCreator(url, start_chapter)
     logger.debug("Starting parsing process")
     parsed_chapters = 0
@@ -140,7 +142,9 @@ def main():
                 logger.info("Dropped chapter %s vol %s '%s' - no content found",
                             chapter.number, chapter.volume, title)
     # we are done
+    result_time = time() - start_time
     logger.info("Parsed %d chapters", parsed_chapters)
+    logger.debug("Time: %d minutes %.2f seconds", result_time // 60, result_time % 60)
     logger.info("All done!")
 
 
