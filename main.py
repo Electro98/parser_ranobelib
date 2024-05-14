@@ -115,6 +115,7 @@ def main():
     parsed_chapters = 0
     with creator as (api, book, toc, chapters):
         chapter_names = []
+        content_hashes = []
         for chapter_info in chapters[:chapters_num]:
             chapter = parse_chapter(api.chapter_link(chapter_info))
             content = ["<html><body>"]
@@ -128,15 +129,21 @@ def main():
             content.append("</html></body>")
             if len(content) > 2:
                 title = deduplicate_name(chapter_names, chapter.name)
+                content = "\n".join(content)
+                content_hash = hash(content)
+                if content_hash in content_hashes:
+                    logger.warn("Found chapter duplicate '%s' - removing", title)
+                    continue
                 book_chapter = epub.EpubHtml(
                     title=title,
                     file_name=f"{title}.xhtml",
                 )
-                book_chapter.content = "\n".join(content)
+                book_chapter.content = content
                 book.add_item(book_chapter)
                 book.spine.append(book_chapter)
                 toc.append(book_chapter)
                 chapter_names.append(title)
+                content_hashes.append(content_hash)
                 logger.info("Finished chapter %s vol %s '%s'",
                             chapter.number, chapter.volume, title)
                 parsed_chapters += 1
