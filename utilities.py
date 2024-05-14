@@ -4,9 +4,9 @@ from enum import StrEnum, auto
 from functools import wraps
 from logging import getLogger
 from time import sleep
-from typing import Any, Type, TypeVar
+from typing import Any, Callable, Generic, Iterable, Type, TypeVar
 
-T = TypeVar("T")
+T, V = TypeVar("T"), TypeVar("V")
 
 logger = getLogger("parser.utils")
 
@@ -43,6 +43,21 @@ class Url:
         )
 
 
+class Seq(Generic[T]):
+    """Generic class for simpler operation stacking."""
+    def __init__(self, seq: Iterable[T]) -> None:
+        self._seq = seq
+    
+    def map(self, func: Callable[[T], V]) -> "Seq[V]":
+        return Seq(map(func, self._seq))
+
+    def filter(self, func: Callable[[T], V] | None) -> "Seq[T]":
+        return Seq(filter(func, self._seq))
+    
+    def collect(self, func: Callable[[Iterable[T]], V]) -> V:
+        return func(self._seq)
+
+
 def from_dict(dataclass: Type[T], data: dict[str, Any]) -> T:
     """Convert average non-nested dict to a dataclass instance."""
     if not is_dataclass(dataclass):
@@ -60,6 +75,25 @@ def get_book_name(book_url: str) -> str | None:
 def get_book_id(book_url: str) -> str | None:
     match = re.search(r"book\/(\d+)--", book_url)
     return None if match is None else match.group(1)
+
+
+def deduplicate_name(names: list[str], name: str) -> str:
+    if name not in names:
+        return name
+    number_striper = re.compile(r".*\((\d+)\)")
+    try:
+        number = (
+            Seq(names)
+                .map(number_striper.search)
+                .filter(None)
+                .map(lambda match: match.group(1))
+                .map(int)
+                .collect(max)
+        )
+    except ValueError:
+        # There was no name with number yet
+        number = 0
+    return f"{name} ({number + 1})"
 
 
 def sanitize_filepath(filename: str) -> str:

@@ -8,7 +8,7 @@ from ebooklib import epub
 
 from api import (BookAPI, ChapterInfo, parse_chapter, parse_chapters,
                  parse_manga_info)
-from utilities import ElementType, sanitize_filepath
+from utilities import ElementType, deduplicate_name, sanitize_filepath
 
 CACHE_FOLDER = Path("cache/")
 
@@ -114,9 +114,9 @@ def main():
     logger.debug("Starting parsing process")
     parsed_chapters = 0
     with creator as (api, book, toc, chapters):
+        chapter_names = []
         for chapter_info in chapters[:chapters_num]:
             chapter = parse_chapter(api.chapter_link(chapter_info))
-            title = chapter.name
             content = ["<html><body>"]
             for elem in chapter.content:
                 if elem.type == ElementType.Text:
@@ -127,6 +127,7 @@ def main():
                     pass
             content.append("</html></body>")
             if len(content) > 2:
+                title = deduplicate_name(chapter_names, chapter.name)
                 book_chapter = epub.EpubHtml(
                     title=title,
                     file_name=f"{title}.xhtml",
@@ -135,6 +136,7 @@ def main():
                 book.add_item(book_chapter)
                 book.spine.append(book_chapter)
                 toc.append(book_chapter)
+                chapter_names.append(title)
                 logger.info("Finished chapter %s vol %s '%s'",
                             chapter.number, chapter.volume, title)
                 parsed_chapters += 1

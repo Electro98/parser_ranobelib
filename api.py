@@ -50,6 +50,7 @@ class Chapter:
 
     def __post_init__(self):
         self.content = _parse_content(self.content)
+        self.name = self.name or f"Volume {self.volume} Chapter {self.number}"
 
 
 def _parse_content(content: dict | str) -> list[Element]:
