@@ -2,7 +2,7 @@ from dataclasses import InitVar, dataclass, field
 from logging import getLogger
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 from utilities import Element
 from utilities import ElementType as ElemType
@@ -70,6 +70,9 @@ def _parse_html_contern(content: str) -> list[Element]:
             elements.append(Element(ElemType.Text, str(elem.string)))
         elif elem.name == "img":
             elements.append(Element(ElemType.ImageLink, elem["src"]))
+        elif isinstance(elem, NavigableString) and elem.text == "\n":
+            # It's just empty string, nothing fancy
+            pass
         else:
             logger.warn("Found unknown element: '%s'", elem)
     return elements

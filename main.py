@@ -126,8 +126,9 @@ def main():
                 elif elem.type == ElementType.ImageLink:
                     pass
             content.append("</html></body>")
+            title = chapter.name
             if len(content) > 2:
-                title = deduplicate_name(chapter_names, chapter.name)
+                title = deduplicate_name(chapter_names, title)
                 book_chapter = epub.EpubHtml(
                     title=title,
                     file_name=f"{title}.xhtml",
